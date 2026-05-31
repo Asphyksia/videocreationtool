@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "CLI for downloading, splitting, editing, and uploading gambling compilation clips",
   "bin": {
-    "clip": "dist/clip.mjs"
+    "clip": "dist/main.js"
   },
-  "main": "dist/clip.mjs",
+  "main": "dist/main.js",
   "license": "Apache-2.0",
   "scripts": {
     "build": "tsc",
