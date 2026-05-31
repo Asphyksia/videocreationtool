@@ -18,6 +18,38 @@ clip edit filter -i best/ -f bw -t minimal --resolution 1080x1920
 clip upload -d output/ -p youtube,tiktok
 ```
 
+## Quality Presets
+
+`clip run` auto-detects your hardware and picks the best preset. You can override with `--preset`:
+
+```bash
+clip run -u "URL" -n 5 -f bw --preset low      # Force low-resource mode
+clip run -u "URL" -n 5 --preset high            # Force max quality
+clip run -u "URL" -n 5                          # Auto-detect (recommended)
+```
+
+| Preset | Download | Detection | Encoding | Output | RAM Use |
+|--------|----------|-----------|----------|--------|---------|
+| **high** | 1080p H.264 | scenedetect (no downscale) | libx264 medium | 1080x1920 | ~1.5GB |
+| **balanced** | 720p H.264 | scenedetect (2x downscale) | libx264 fast | 1080x1920 | ~800MB |
+| **low** | 480p H.264 | FFmpeg (4x downscale) | libx264 ultrafast | 720x1280 | ~300MB |
+
+**Auto-detection logic:**
+- GPU + NVENC + ≥8GB RAM → `high`
+- ≥6GB RAM OR NVENC → `balanced`
+- Otherwise → `low`
+
+**When to force `--preset low`:**
+- Machine has <8GB RAM and scenedetect gets OOM-killed
+- NVIDIA driver <435 (NVENC not usable even if GPU present)
+- i3/i5 CPU with ≤4 cores
+
+Manual split also supports downscaling:
+```bash
+clip vod split -i video.mp4 -d 2    # Half resolution detection
+clip vod split -i video.mp4 -d 4    # Quarter resolution detection
+```
+
 ## Commands
 
 ### `clip auth` — Credential management
@@ -83,6 +115,8 @@ Requires `clip auth login` per platform. TikTok uses Playwright browser automati
 clip run -u "URL" -n 5 -f bw -t minimal -p youtube,tiktok
 clip run -u "URL" -n 5 -f bw --no-upload --keep-intermediate  # Local-only test
 clip run -u local_file.mp4 --skip-download                     # Use local file
+clip run -u "URL" --preset low --no-upload                     # Low-resource mode
+clip run -u "URL" --preset high -f bw-flash                    # Max quality + color flash
 ```
 
 ## Installation
@@ -130,10 +164,15 @@ PySceneDetect with OpenCV backend cannot decode AV1 videos (YouTube increasingly
 The `--json` flag was removed in v0.7. The code parses stdout table output instead. Already fixed in repo.
 
 ### Memory limits on low-spec machines
-PySceneDetect with OpenCV on 1080p60 video can use 150-250MB+ RAM per process. For <8GB systems:
-- Process in chunks (2-3 min segments)
-- Use `-d 2` downscaling flag in scenedetect
-- Use FFmpeg detector (`-m ffmpeg`) as fallback
+PySceneDetect with OpenCV on 1080p60 video can use 150-250MB+ RAM per process. The sandbox kills processes that exceed memory limits.
+
+**Solutions (in order of reliability):**
+1. **Use `--preset low`** — forces FFmpeg detection (no OpenCV) + 4x downscale + ultrafast encoding
+2. **Use `-d 2` or `-d 4`** downscaling with scenedetect: `clip vod split -i video.mp4 -d 4`
+3. **Use FFmpeg detector directly:** `clip vod split -i video.mp4 -m ffmpeg --threshold 0.3`
+4. Process in 1-2 minute chunks only
+
+**If scenedetect gets SIGKILL'd**, the agent MUST fall back to `--preset low` or FFmpeg detection. Do NOT retry scenedetect on the same machine.
 
 ### `workspace:*` protocol
 This project uses pnpm's workspace protocol. If using npm, convert `workspace:*` to `"*"` in `packages/cli/package.json` dependencies.
