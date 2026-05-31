@@ -16,3 +16,6 @@ export type { FilterType, TemplateType, EditOptions, EditResult, BWFlashOptions 
 
 export { uploadVideo, uploadToYouTube, uploadToTikTok, uploadToInstagram } from "./upload/index.js";
 export type { UploadOptions, UploadResult } from "./upload/index.js";
+
+export { detectSystemCapabilities, getEncoder, PRESETS } from "./system/capabilities.js";
+export type { SystemCapabilities, PresetConfig } from "./system/capabilities.js";

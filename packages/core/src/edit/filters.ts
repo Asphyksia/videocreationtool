@@ -13,6 +13,44 @@ import { execa } from "execa";
 import { readdir, mkdir } from "fs/promises";
 import { join, extname, basename } from "path";
 
+// ─── Hardware encoding detection ────────────────────────────────────
+
+let nvencAvailable: boolean | null = null;
+
+async function detectNVENC(): Promise<boolean> {
+  if (nvencAvailable !== null) return nvencAvailable;
+  try {
+    // Check encoders list
+    const result = await execa("ffmpeg", ["-encoders"], { reject: false });
+    const hasEncoder = (result.stdout + result.stderr).includes("h264_nvenc");
+    if (!hasEncoder) { nvencAvailable = false; return false; }
+
+    // Check NVIDIA driver version supports NVENC
+    // Driver 390.x is too old; need >= 418 for NVENC API 9.1, >= 435 for 10.0
+    const smi = await execa("nvidia-smi", [
+      "--query-gpu=driver_version",
+      "--format=csv,noheader",
+    ], { reject: false });
+    const driverVer = parseFloat(smi.stdout.trim()) || 0;
+    
+    // NVENC requires driver >= 435 for decent API support
+    nvencAvailable = driverVer >= 435;
+    if (!nvencAvailable) {
+      console.log(`  ⚠ NVENC encoder found but NVIDIA driver ${driverVer} is too old (need >= 435). Falling back to CPU encoding.`);
+    }
+  } catch {
+    nvencAvailable = false;
+  }
+  return nvencAvailable;
+}
+
+function getEncoderConfig(useHW: boolean): { codec: string; preset: string; crf: string } {
+  if (useHW) {
+    return { codec: "h264_nvenc", preset: "p4", crf: "23" };
+  }
+  return { codec: "libx264", preset: "fast", crf: "23" };
+}
+
 export type FilterType = "bw" | "bw-flash" | "high-contrast" | "vhs" | "custom";
 export type TemplateType = "minimal" | "custom";
 
@@ -89,21 +127,55 @@ export async function applyFilter(
   
   const outputFile = join(outputDir, basename(inputPath, extname(inputPath)) + "_edited.mp4");
   
+  const useNVENC = await detectNVENC();
+  const enc = getEncoderConfig(useNVENC);
+  
   const args = [
     "-i", inputPath,
     ...(opts.logoPath ? ["-i", opts.logoPath] : []),
     ...(opts.overlayPath ? ["-i", opts.overlayPath] : []),
     "-vf", allFilters,
-    "-c:v", "libx264",
-    "-preset", "fast",
-    "-crf", "23",
+    "-c:v", enc.codec,
+    "-preset", enc.preset,
+    "-crf", enc.crf,
     "-c:a", "aac",
     "-b:a", "128k",
     "-y",
     outputFile,
   ];
   
-  await execa("ffmpeg", args);
+  // NVENC specific: use -cq instead of -crf, add -rc vbr
+  if (useNVENC) {
+    // Replace -crf with -cq for NVENC
+    const crfIdx = args.indexOf("-crf");
+    if (crfIdx !== -1) {
+      args[crfIdx] = "-cq";
+    }
+    // Add VBR rate control
+    args.push("-rc", "vbr");
+  }
+  
+  try {
+    await execa("ffmpeg", args);
+  } catch (encodingErr: any) {
+    // If NVENC fails (e.g. driver too old), fallback to CPU encoding
+    if (useNVENC && encodingErr.message?.includes("nvenc")) {
+      console.log("  ⚠ NVENC failed, retrying with CPU encoding...");
+      const crfIdx2 = args.indexOf("-cq");
+      if (crfIdx2 !== -1) args[crfIdx2] = "-crf";
+      // Remove -rc vbr if present
+      const rcIdx = args.indexOf("-rc");
+      if (rcIdx !== -1) args.splice(rcIdx, 2);
+      // Replace encoder
+      const encIdx = args.indexOf("h264_nvenc");
+      if (encIdx !== -1) args[encIdx] = "libx264";
+      const presetIdx = args.indexOf("-preset");
+      if (presetIdx !== -1 && args[presetIdx + 1]) args[presetIdx + 1] = "ultrafast";
+      await execa("ffmpeg", args);
+    } else {
+      throw encodingErr;
+    }
+  }
   
   return {
     outputPath: outputFile,
@@ -161,12 +233,15 @@ export async function applyBWFlash(
     ? `hue=s=0:enable='${enableParts.join("+")}'`
     : "hue=s=0";
   
+  const useNVENC = await detectNVENC();
+  const enc = getEncoderConfig(useNVENC);
+  
   await execa("ffmpeg", [
     "-i", opts.inputPath,
     "-vf", enableExpr,
-    "-c:v", "libx264",
-    "-preset", "fast",
-    "-crf", "23",
+    "-c:v", enc.codec,
+    "-preset", enc.preset,
+    "-crf", enc.crf,
     "-c:a", "aac",
     "-b:a", "128k",
     "-y",

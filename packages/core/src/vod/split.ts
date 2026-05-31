@@ -16,6 +16,7 @@ export interface SplitOptions {
   threshold?: number;      // scene detection sensitivity (default: 27)
   minLength?: number;      // minimum clip length in seconds (default: 3)
   maxLength?: number;      // maximum clip length in seconds (default: 120)
+  downscale?: number;      // downscale factor for scene detection (1=none, 2=half, 4=quarter)
 }
 
 export interface SceneBoundary {
@@ -40,9 +41,10 @@ export interface SplitResult {
 export async function detectScenes(opts: SplitOptions): Promise<SceneBoundary[]> {
   const threshold = opts.threshold ?? 27;
   const method = opts.method ?? "scenedetect";
+  const downscale = opts.downscale ?? 1;
 
   if (method === "scenedetect") {
-    return detectWithPySceneDetect(opts.input, threshold);
+    return detectWithPySceneDetect(opts.input, threshold, downscale);
   } else if (method === "ffmpeg") {
     return detectWithFFmpeg(opts.input, threshold);
   } else {
@@ -53,15 +55,21 @@ export async function detectScenes(opts: SplitOptions): Promise<SceneBoundary[]>
 async function detectWithPySceneDetect(
   input: string,
   threshold: number,
+  downscale: number = 1,
 ): Promise<SceneBoundary[]> {
   // PySceneDetect 0.7 removed --json; parse table output instead
-  const result = await execa("scenedetect", [
+  const args: string[] = [
     "-i", input,
     "detect-content",
     "-t", String(threshold),
     "list-scenes",
     "-n",       // print to stdout (no file)
-  ], { reject: false });
+  ];
+  // Downscale before processing to save memory
+  if (downscale > 1) {
+    args.splice(2, 0, "-d", String(downscale));  // global flag after -i, before commands
+  }
+  const result = await execa("scenedetect", args, { reject: false });
 
   const output = result.stdout || result.stderr || "";
   const scenes: SceneBoundary[] = [];

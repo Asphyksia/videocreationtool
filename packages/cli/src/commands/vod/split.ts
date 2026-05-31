@@ -11,6 +11,7 @@ export function splitCommand(): Command {
     .option("-t, --threshold <number>", "Scene detection sensitivity (lower = more cuts)", parseFloat)
     .option("--min-length <seconds>", "Minimum clip length in seconds", parseFloat)
     .option("--max-length <seconds>", "Maximum clip length in seconds", parseFloat)
+    .option("-d, --downscale <factor>", "Downscale factor for detection (1-4, saves RAM)", parseFloat)
     .action(async (opts) => {
       try {
         // Check dependencies
@@ -35,6 +36,7 @@ export function splitCommand(): Command {
           threshold: opts.threshold ?? 27,
           minLength: opts.minLength ?? 3,
           maxLength: opts.maxLength ?? 120,
+          downscale: opts.downscale ?? 1,
         });
 
         spinner.succeed(`Found ${result.clips.length} clips`);

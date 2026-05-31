@@ -14,6 +14,7 @@ export function pipelineRunCommand(): Command {
     .option("-p, --platform <platforms>", "Comma-separated upload platforms", "youtube")
     .option("--title <title>", "Video title for uploads", "Clip {index}")
     .option("--tags <tags>", "Comma-separated tags", "slots,bigwin,gambling")
+    .option("--preset <preset>", "Quality preset: high, balanced, low (auto-detected if omitted)")
     .option("--no-upload", "Skip upload step (just process locally)")
     .option("--skip-download", "Skip download (use local file)")
     .option("--output <dir>", "Base output directory", "./clip-output")
@@ -26,6 +27,8 @@ export function pipelineRunCommand(): Command {
         scoreClips,
         editDirectory,
         uploadVideo,
+        detectSystemCapabilities,
+        PRESETS,
       } = await import("clip-cli-core");
       const ora = (await import("ora")).default;
       const { mkdir, rm } = await import("fs/promises");
@@ -35,6 +38,14 @@ export function pipelineRunCommand(): Command {
       let videoPath: string;
       const topN = opts.top ?? 5;
       const outputBase = opts.output;
+
+      // ─── Detect system capabilities and select preset ───────────────
+      const caps = await detectSystemCapabilities();
+      const presetName = opts.preset ?? caps.recommendedPreset;
+      const preset = PRESETS[presetName] ?? PRESETS["balanced"];
+      
+      console.log(`System: ${caps.hasGPU ? caps.gpuName : "CPU-only"}, ${caps.totalRamMB}MB RAM, ${caps.cpuCores} cores`);
+      console.log(`Preset: ${presetName} (NVENC: ${caps.hasNVENC ? "yes" : "no"}, split: ${preset.splitMethod}, downscale: ${preset.downscale}x)`);
 
       try {
         // ─── Step 1: Download ──────────────────────────────────────────
@@ -51,6 +62,7 @@ export function pipelineRunCommand(): Command {
           const result = await downloadVideo({
             url: opts.url,
             output: join(outputBase, "downloads"),
+            format: preset.downloadFormat,
             mergeOutputFormat: "mp4",
           });
           videoPath = result.filePath;
@@ -62,10 +74,11 @@ export function pipelineRunCommand(): Command {
         const splitResult = await splitVideo({
           input: videoPath,
           outputDir: join(outputBase, "clips"),
-          method: "scenedetect",
-          threshold: opts.threshold ?? 27,
-          minLength: opts.minLength ?? 3,
+          method: preset.splitMethod,
+          threshold: opts.threshold ?? preset.splitThreshold,
+          minLength: opts.minLength ?? preset.minLength,
           maxLength: opts.maxLength ?? 120,
+          downscale: preset.downscale,
         });
         spinner2.succeed(`Step 2/5: Split into ${splitResult.clips.length} clips`);
 
