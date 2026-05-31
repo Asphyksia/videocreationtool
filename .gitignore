@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+downloads/
+clips/
+best/
+output/
+.pycache/
+__pycache__/
+.env
+config.json

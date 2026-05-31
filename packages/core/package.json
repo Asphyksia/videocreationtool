@@ -1,0 +1,19 @@
+{
+  "name": "clip-cli-core",
+  "version": "0.1.0",
+  "description": "Core library for clip-cli: video download, scene detection, scoring, editing, and upload",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "execa": "^9.5.2",
+    "yoctocolors": "^2.1.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

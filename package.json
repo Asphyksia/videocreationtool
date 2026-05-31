@@ -1,0 +1,11 @@
+{
+  "name": "clip-cli-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI for downloading, splitting, editing, and uploading gambling compilation clips",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/core",
+    "packages/cli"
+  ]
+}

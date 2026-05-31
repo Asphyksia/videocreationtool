@@ -1,0 +1,24 @@
+{
+  "name": "clip-cli",
+  "version": "0.1.0",
+  "description": "CLI for downloading, splitting, editing, and uploading gambling compilation clips",
+  "bin": {
+    "clip": "dist/clip.mjs"
+  },
+  "main": "dist/clip.mjs",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "clip-cli-core": "workspace:*",
+    "commander": "^13.1.0",
+    "yoctocolors": "^2.1.1",
+    "ora": "^8.1.1",
+    "cli-table3": "^0.6.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
