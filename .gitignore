@@ -13,3 +13,4 @@ output/
 __pycache__/
 .env
 config.json
+CONTEXT.md
