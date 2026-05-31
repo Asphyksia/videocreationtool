@@ -54,42 +54,29 @@ async function detectWithPySceneDetect(
   input: string,
   threshold: number,
 ): Promise<SceneBoundary[]> {
-  // Use scenedetect CLI to find scene boundaries
-  // Output as JSON for easy parsing
+  // PySceneDetect 0.7 removed --json; parse table output instead
   const result = await execa("scenedetect", [
     "-i", input,
     "detect-content",
     "-t", String(threshold),
     "list-scenes",
-    "--json",
-  ]);
+    "-n",       // print to stdout (no file)
+  ], { reject: false });
 
-  // Parse JSON output from scenedetect
+  const output = result.stdout || result.stderr || "";
   const scenes: SceneBoundary[] = [];
-  try {
-    const parsed = JSON.parse(result.stdout);
-    for (const scene of parsed.scenes ?? []) {
+
+  // Parse table rows: |  Scene #  | Start Frame |  Start Time  |  End Frame  |   End Time   |
+  //                    |      1   |           1 | 00:00:00.000 |          51 | 00:00:02.040 |
+  const tableRowRe = /^\s*\|\s+(\d+)\s+\|\s+\d+\s+\|\s+(\d+:\d+:\d+\.\d+)\s+\|\s+\d+\s+\|\s+(\d+:\d+:\d+\.\d+)\s+\|/;
+
+  for (const line of output.split("\n")) {
+    const match = line.match(tableRowRe);
+    if (match) {
       scenes.push({
-        startTime: scene.start_time ?? scene.start_seconds ?? 0,
-        endTime: scene.end_time ?? scene.end_seconds ?? 0,
+        startTime: parseTimestamp(match[2]!),  // Start Time
+        endTime: parseTimestamp(match[3]!),    // End Time
       });
-    }
-  } catch {
-    // Fallback: parse the CSV output
-    const csvResult = await execa("scenedetect", [
-      "-i", input,
-      "detect-content",
-      "-t", String(threshold),
-      "list-scenes",
-    ]);
-    for (const line of csvResult.stdout.split("\n")) {
-      const match = line.match(/(\d+:\d+:\d+\.\d+)\s+(\d+:\d+:\d+\.\d+)/);
-      if (match) {
-        scenes.push({
-          startTime: parseTimestamp(match[1]),
-          endTime: parseTimestamp(match[2]),
-        });
-      }
     }
   }
 
